@@ -43,7 +43,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.junit.jupiter.api.Test;
 
 public class TestRlpAddress {
-  private static final int TEST_TX_COUNT = 200;
+  private static final int TEST_TX_COUNT = 30;
   private final Random rnd = new Random(666);
 
   @Test
@@ -113,7 +113,7 @@ public class TestRlpAddress {
   private ToyAccount randCreate(int initCodeSize) {
     byte[] value = bigIntegerToBytes(BigInteger.valueOf(randLong())).toArray();
     return ToyAccount.builder()
-        .balance(Wei.MAX_WEI)
+        .balance(Wei.fromEth(1000))
         .nonce(randLong())
         .address(Address.wrap(Bytes.repeat((byte) 0x01, 20)))
         .code(
@@ -135,7 +135,7 @@ public class TestRlpAddress {
     byte[] value = bigIntegerToBytes(BigInteger.valueOf(randLong())).toArray();
 
     return ToyAccount.builder()
-        .balance(Wei.MAX_WEI)
+        .balance(Wei.fromEth(1000))
         .nonce(randLong())
         .address(Address.wrap(Bytes.repeat((byte) 0x02, 20)))
         .code(

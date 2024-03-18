@@ -71,7 +71,7 @@ public class BytecodeCompiler {
         final int pushSize = opCode.byteValue() - (int) OpCode.PUSH1.byteValue() + 1;
         final boolean isPush = pushSize >= 1 && pushSize <= 32;
         if (isPush) {
-          this.immediate(Bytes.fromHexString(ls[1], pushSize));
+          this.immediate(Bytes.fromHexStringLenient(ls[1], pushSize));
         } else {
           if (ls.length > 1) {
             throw new IllegalArgumentException("expected nothing, found" + ls[1]);
@@ -182,6 +182,16 @@ public class BytecodeCompiler {
    */
   public BytecodeCompiler push(final BigInteger xs) {
     return this.push(bigIntegerToBytes(xs));
+  }
+
+  /**
+   * Add a {@link OpCode#PUSH1} and a {@link String} argument representing a hex number.
+   *
+   * @param x String argument representing a hex number
+   * @return current instance
+   */
+  public BytecodeCompiler push(final String x) {
+    return this.push(new BigInteger(x, 16));
   }
 
   /**
