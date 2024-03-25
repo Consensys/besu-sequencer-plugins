@@ -15,7 +15,6 @@
 
 package net.consensys.linea.zktracer.module.hub.fragment;
 
-import net.consensys.linea.zktracer.module.hub.Hub;
 import net.consensys.linea.zktracer.module.hub.Trace;
 
 /**
@@ -24,20 +23,4 @@ import net.consensys.linea.zktracer.module.hub.Trace;
  */
 public interface TraceFragment {
   Trace trace(Trace trace);
-
-  /**
-   * This hook is called by the {@link Hub} at the end of the transaction to retrofit information if
-   * required.
-   *
-   * @param hub a reference to the hub
-   */
-  default void postTxRetcon(Hub hub) {}
-
-  /**
-   * This hook is called by the {@link Hub} at the end of the conflation to retrofit information if
-   * required.
-   *
-   * @param hub a reference to the hub
-   */
-  default void postConflationRetcon(Hub hub) {}
 }

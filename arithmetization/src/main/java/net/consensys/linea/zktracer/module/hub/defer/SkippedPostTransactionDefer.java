@@ -17,7 +17,6 @@ package net.consensys.linea.zktracer.module.hub.defer;
 
 import net.consensys.linea.zktracer.module.hub.AccountSnapshot;
 import net.consensys.linea.zktracer.module.hub.Hub;
-import net.consensys.linea.zktracer.module.hub.fragment.AccountFragment;
 import net.consensys.linea.zktracer.module.hub.fragment.TransactionFragment;
 import net.consensys.linea.zktracer.module.hub.section.TxSkippedSection;
 import org.hyperledger.besu.datatypes.Address;
@@ -42,28 +41,31 @@ public record SkippedPostTransactionDefer(
     Wei baseFee)
     implements PostTransactionDefer {
   @Override
-  public void runPostTx(Hub hub, WorldView state, Transaction tx) {
+  public void runPostTx(Hub hub, WorldView state, Transaction tx, boolean isSuccessful) {
     Address fromAddress = this.oldFromAccount.address();
     Address toAddress = this.oldToAccount.address();
     Address minerAddress = this.oldMinerAccount.address();
-    hub.conflation().deploymentInfo().unmarkDeploying(toAddress);
+    hub.transients().conflation().deploymentInfo().unmarkDeploying(toAddress);
 
     AccountSnapshot newFromAccount =
         AccountSnapshot.fromAccount(
             state.get(fromAddress),
             true,
-            hub.conflation().deploymentInfo().number(fromAddress),
+            hub.transients().conflation().deploymentInfo().number(fromAddress),
             false);
 
     AccountSnapshot newToAccount =
         AccountSnapshot.fromAccount(
-            state.get(toAddress), true, hub.conflation().deploymentInfo().number(toAddress), false);
+            state.get(toAddress),
+            true,
+            hub.transients().conflation().deploymentInfo().number(toAddress),
+            false);
 
     AccountSnapshot newMinerAccount =
         AccountSnapshot.fromAccount(
             state.get(minerAddress),
             true,
-            hub.conflation().deploymentInfo().number(minerAddress),
+            hub.transients().conflation().deploymentInfo().number(minerAddress),
             false);
 
     // Append the final chunk to the hub chunks
@@ -72,20 +74,22 @@ public record SkippedPostTransactionDefer(
             hub,
             // 3 lines -- account changes
             // From
-            new AccountFragment(oldFromAccount, newFromAccount, false, 0, false),
+            hub.factories().accountFragment().make(oldFromAccount, newFromAccount, false, 0, false),
             // To
-            new AccountFragment(oldToAccount, newToAccount, false, 0, false),
+            hub.factories().accountFragment().make(oldToAccount, newToAccount, false, 0, false),
             // Miner
-            new AccountFragment(oldMinerAccount, newMinerAccount, false, 0, false),
+            hub.factories()
+                .accountFragment()
+                .make(oldMinerAccount, newMinerAccount, false, 0, false),
 
             // 1 line -- transaction data
             TransactionFragment.prepare(
-                hub.conflation().number(),
+                hub.transients().conflation().number(),
                 minerAddress,
                 tx,
                 false,
                 gasPrice,
                 baseFee,
-                hub.tx().initialGas())));
+                hub.transients().tx().initialGas())));
   }
 }
