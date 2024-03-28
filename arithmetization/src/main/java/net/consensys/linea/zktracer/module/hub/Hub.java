@@ -58,7 +58,7 @@ import net.consensys.linea.zktracer.module.limits.precompiles.EcPairingCallEffec
 import net.consensys.linea.zktracer.module.limits.precompiles.EcPairingMillerLoop;
 import net.consensys.linea.zktracer.module.limits.precompiles.EcRecoverEffectiveCall;
 import net.consensys.linea.zktracer.module.limits.precompiles.ModexpEffectiveCall;
-import net.consensys.linea.zktracer.module.limits.precompiles.Rip160Blocks;
+import net.consensys.linea.zktracer.module.limits.precompiles.RipeMd160Blocks;
 import net.consensys.linea.zktracer.module.limits.precompiles.Sha256Blocks;
 import net.consensys.linea.zktracer.module.logData.LogData;
 import net.consensys.linea.zktracer.module.logInfo.LogInfo;
@@ -223,7 +223,7 @@ public class Hub implements Module {
         List.of(
             new Sha256Blocks(this),
             ecRec,
-            new Rip160Blocks(this),
+            new RipeMd160Blocks(this),
             this.modexp,
             new EcAddEffectiveCall(this),
             new EcMulEffectiveCall(this),
