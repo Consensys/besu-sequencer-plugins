@@ -48,6 +48,7 @@ import static net.consensys.linea.zktracer.module.mmu.Trace.MMU_INST_RIGHT_PADDE
 import java.util.Arrays;
 
 import com.google.common.base.Preconditions;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -63,6 +64,7 @@ import net.consensys.linea.zktracer.module.hub.fragment.imc.call.mmu.opcode.Retu
 import net.consensys.linea.zktracer.module.hub.precompiles.Blake2fMetadata;
 import net.consensys.linea.zktracer.module.hub.precompiles.ModExpMetadata;
 import net.consensys.linea.zktracer.module.hub.precompiles.PrecompileInvocation;
+import net.consensys.linea.zktracer.runtime.callstack.CallFrame;
 import net.consensys.linea.zktracer.types.EWord;
 import net.consensys.linea.zktracer.types.MemorySpan;
 import org.apache.tuweni.bytes.Bytes;
@@ -75,6 +77,7 @@ import org.hyperledger.besu.evm.internal.Words;
  */
 @RequiredArgsConstructor
 @Setter
+@Getter
 @Accessors(fluent = true)
 public class MmuCall implements TraceSubFragment {
   protected boolean enabled = true;
@@ -91,62 +94,6 @@ public class MmuCall implements TraceSubFragment {
   protected Bytes limb1 = Bytes.EMPTY;
   protected Bytes limb2 = Bytes.EMPTY;
   protected long phase = 0;
-
-  protected boolean enabled() {
-    return this.enabled;
-  }
-
-  protected int instruction() {
-    return this.instruction;
-  }
-
-  protected int sourceId() {
-    return this.sourceId;
-  }
-
-  protected int targetId() {
-    return this.targetId;
-  }
-
-  protected int auxId() {
-    return this.auxId;
-  }
-
-  protected EWord sourceOffset() {
-    return this.sourceOffset;
-  }
-
-  protected EWord targetOffset() {
-    return this.targetOffset;
-  }
-
-  protected long size() {
-    return this.size;
-  }
-
-  protected long referenceOffset() {
-    return this.referenceOffset;
-  }
-
-  protected long referenceSize() {
-    return this.referenceSize;
-  }
-
-  protected boolean successBit() {
-    return this.successBit;
-  }
-
-  protected Bytes limb1() {
-    return this.limb1;
-  }
-
-  protected Bytes limb2() {
-    return this.limb2;
-  }
-
-  protected long phase() {
-    return this.phase;
-  }
 
   private int exoSum = 0;
 
@@ -218,7 +165,7 @@ public class MmuCall implements TraceSubFragment {
                     hub.currentFrame().callData().toArray(), (int) offset, (int) (offset + 32))));
 
     return new MmuCall(MMU_INST_RIGHT_PADDED_WORD_EXTRACTION)
-        .sourceId(hub.callStack().getById(hub.currentFrame().parentFrame()).contextNumber())
+        .sourceId(callDataContextNumber(hub))
         .sourceOffset(EWord.of(hub.messageFrame().getStackItem(0)))
         .referenceOffset(offset)
         .referenceSize(size)
@@ -228,14 +175,23 @@ public class MmuCall implements TraceSubFragment {
 
   public static MmuCall callDataCopy(final Hub hub) {
     final MemorySpan callDataSegment = hub.currentFrame().callDataSource();
+
     return new MmuCall(MMU_INST_ANY_TO_RAM_WITH_PADDING)
-        .sourceId(hub.transients().tx().absNumber())
+        .sourceId(callDataContextNumber(hub))
         .targetId(hub.currentFrame().contextNumber())
         .sourceOffset(EWord.of(hub.messageFrame().getStackItem(1)))
         .targetOffset(EWord.of(hub.messageFrame().getStackItem(0)))
         .size(Words.clampedToLong(hub.messageFrame().getStackItem(2)))
         .referenceOffset(callDataSegment.offset())
         .referenceSize(callDataSegment.length());
+  }
+
+  private static int callDataContextNumber(final Hub hub) {
+    final CallFrame currentFrame = hub.callStack().current();
+
+    return currentFrame.isRoot()
+        ? currentFrame.contextNumber() - 1
+        : hub.callStack().parent().contextNumber();
   }
 
   public static MmuCall codeCopy(final Hub hub) {
@@ -263,7 +219,7 @@ public class MmuCall implements TraceSubFragment {
     final EWord loadedValue = EWord.of(hub.messageFrame().shadowReadMemory(offset, 32));
     return new MmuCall(MMU_INST_MLOAD)
         .sourceId(hub.currentFrame().contextNumber())
-        .sourceOffset(EWord.of(hub.messageFrame().getStackItem(0)))
+        .sourceOffset(EWord.of(offset))
         .limb1(loadedValue.hi())
         .limb2(loadedValue.lo());
   }
@@ -271,8 +227,8 @@ public class MmuCall implements TraceSubFragment {
   public static MmuCall mstore(final Hub hub) {
     final EWord storedValue = EWord.of(hub.messageFrame().getStackItem(1));
     return new MmuCall(MMU_INST_MSTORE)
-        .sourceId(hub.currentFrame().contextNumber())
-        .sourceOffset(EWord.of(hub.messageFrame().getStackItem(0)))
+        .targetId(hub.currentFrame().contextNumber())
+        .targetOffset(EWord.of(hub.messageFrame().getStackItem(0)))
         .limb1(storedValue.hi())
         .limb2(storedValue.lo());
   }
@@ -280,8 +236,8 @@ public class MmuCall implements TraceSubFragment {
   public static MmuCall mstore8(final Hub hub) {
     final EWord storedValue = EWord.of(hub.messageFrame().getStackItem(1));
     return new MmuCall(MMU_INST_MSTORE8)
-        .sourceId(hub.currentFrame().contextNumber())
-        .sourceOffset(EWord.of(hub.messageFrame().getStackItem(0)))
+        .targetId(hub.currentFrame().contextNumber())
+        .targetOffset(EWord.of(hub.messageFrame().getStackItem(0)))
         .limb1(storedValue.hi())
         .limb2(storedValue.lo());
   }

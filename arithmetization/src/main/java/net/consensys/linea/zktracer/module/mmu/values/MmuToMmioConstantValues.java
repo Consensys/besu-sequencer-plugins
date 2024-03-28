@@ -13,18 +13,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package net.consensys.linea.zktracer.module.mmu;
+package net.consensys.linea.zktracer.module.mmu.values;
 
 import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.Accessors;
 
-@Accessors(fluent = true)
-@EqualsAndHashCode
 @Builder
-class Contexts {
-  @Getter @Setter private int source;
-  @Getter @Setter private int target;
-}
+public record MmuToMmioConstantValues(
+    int sourceContextNumber,
+    int targetContextNumber,
+    boolean successBit,
+    int exoSum,
+    long phase,
+    int exoId,
+    int kecId,
+    int totalSize) {}

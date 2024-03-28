@@ -13,25 +13,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package net.consensys.linea.zktracer.module.mmu;
+package net.consensys.linea.zktracer.module.mmio;
 
-import java.util.Map;
-import java.util.Set;
-
-import net.consensys.linea.zktracer.opcode.OpCode;
-import net.consensys.linea.zktracer.runtime.callstack.CallStack;
-import net.consensys.linea.zktracer.runtime.stack.StackOperation;
-
-interface MmuPreComputation {
-  MicroData dispatch(
-      MicroData microData,
-      OpCode opCode,
-      Map<Integer, StackOperation> stackOps,
-      CallStack callStack);
-
-  MicroData preProcess(MicroData microData, CallStack callStack);
-
-  MicroData process(MicroData microData, CallStack callStack);
-
-  Set<Integer> preComputationTypes();
+public enum ExoSource {
+  ROM,
+  TX_CALLDATA,
+  KECCAK,
+  RIPSHA,
+  LOG,
+  EC_DATA,
+  BLAKE2f_MODEXP
 }

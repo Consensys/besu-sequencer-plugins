@@ -13,20 +13,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package net.consensys.linea.zktracer.module.mmu;
+package net.consensys.linea.zktracer.module.mmu.instructions;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.Accessors;
-import org.apache.tuweni.bytes.Bytes;
+import net.consensys.linea.zktracer.module.mmu.MmuData;
+import net.consensys.linea.zktracer.runtime.callstack.CallStack;
 
-@Builder
-@Getter
-@Setter
-@Accessors(fluent = true)
-class Pointers {
-  private Bytes stack1;
-  private Bytes stack2;
-  private boolean oob;
+public interface MmuInstruction {
+  MmuData preProcess(MmuData mmuData, final CallStack callStack);
+
+  MmuData setMicroInstructions(MmuData mmuData);
 }

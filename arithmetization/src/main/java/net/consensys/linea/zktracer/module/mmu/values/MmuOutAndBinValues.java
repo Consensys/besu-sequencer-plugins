@@ -13,20 +13,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package net.consensys.linea.zktracer.module.mmu;
+package net.consensys.linea.zktracer.module.mmu.values;
 
 import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.Accessors;
-import net.consensys.linea.zktracer.types.EWord;
-import net.consensys.linea.zktracer.types.UnsignedByte;
 
 @Builder
-@Accessors(fluent = true)
-@EqualsAndHashCode
-class LimbByte {
-  @Getter @Setter private EWord limb;
-  @Getter @Setter private UnsignedByte uByte;
+public record MmuOutAndBinValues(
+    int out1,
+    int out2,
+    int out3,
+    int out4,
+    int out5,
+    boolean bin1,
+    boolean bin2,
+    boolean bin3,
+    boolean bin4,
+    boolean bin5) {
+  public static final MmuOutAndBinValues DEFAULT = builder().build();
 }
