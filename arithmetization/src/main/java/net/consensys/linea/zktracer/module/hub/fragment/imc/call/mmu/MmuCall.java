@@ -15,6 +15,7 @@
 
 package net.consensys.linea.zktracer.module.hub.fragment.imc.call.mmu;
 
+import static net.consensys.linea.zktracer.module.Util.slice;
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.EMPTY_RIPEMD_HI;
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.EMPTY_RIPEMD_LO;
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.EMPTY_SHA2_HI;
@@ -33,7 +34,6 @@ import static net.consensys.linea.zktracer.module.constants.GlobalConstants.MMU_
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.MMU_INST_MODEXP_DATA;
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.MMU_INST_MODEXP_ZERO;
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.MMU_INST_MSTORE;
-import static net.consensys.linea.zktracer.module.constants.GlobalConstants.MMU_INST_MSTORE8;
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.MMU_INST_RAM_TO_EXO_WITH_PADDING;
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.MMU_INST_RAM_TO_RAM_SANS_PADDING;
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.MMU_INST_RIGHT_PADDED_WORD_EXTRACTION;
@@ -60,7 +60,7 @@ import static net.consensys.linea.zktracer.module.constants.GlobalConstants.RLP_
 import static net.consensys.linea.zktracer.module.constants.GlobalConstants.WORD_SIZE;
 import static net.consensys.linea.zktracer.types.Conversions.bigIntegerToBytes;
 
-import java.util.Arrays;
+import java.util.Optional;
 
 import com.google.common.base.Preconditions;
 import lombok.Getter;
@@ -68,17 +68,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import net.consensys.linea.zktracer.module.hub.Hub;
+import net.consensys.linea.zktracer.module.hub.State;
 import net.consensys.linea.zktracer.module.hub.Trace;
 import net.consensys.linea.zktracer.module.hub.fragment.TraceSubFragment;
 import net.consensys.linea.zktracer.module.hub.fragment.imc.call.mmu.opcode.CodeCopy;
 import net.consensys.linea.zktracer.module.hub.fragment.imc.call.mmu.opcode.Create;
 import net.consensys.linea.zktracer.module.hub.fragment.imc.call.mmu.opcode.Create2;
 import net.consensys.linea.zktracer.module.hub.fragment.imc.call.mmu.opcode.ExtCodeCopy;
-import net.consensys.linea.zktracer.module.hub.fragment.imc.call.mmu.opcode.LogX;
 import net.consensys.linea.zktracer.module.hub.fragment.imc.call.mmu.opcode.ReturnFromDeployment;
 import net.consensys.linea.zktracer.module.hub.precompiles.Blake2fMetadata;
 import net.consensys.linea.zktracer.module.hub.precompiles.ModExpMetadata;
 import net.consensys.linea.zktracer.module.hub.precompiles.PrecompileInvocation;
+import net.consensys.linea.zktracer.runtime.LogInvocation;
 import net.consensys.linea.zktracer.runtime.callstack.CallFrame;
 import net.consensys.linea.zktracer.types.EWord;
 import net.consensys.linea.zktracer.types.MemorySpan;
@@ -95,7 +96,6 @@ import org.hyperledger.besu.evm.internal.Words;
 @Getter
 @Accessors(fluent = true)
 public class MmuCall implements TraceSubFragment {
-  protected boolean enabled = true;
   protected int instruction = 0;
   protected int sourceId = 0;
   protected int targetId = 0;
@@ -109,6 +109,10 @@ public class MmuCall implements TraceSubFragment {
   protected Bytes limb1 = Bytes.EMPTY;
   protected Bytes limb2 = Bytes.EMPTY;
   protected long phase = 0;
+
+  private Optional<Bytes> sourceRamBytes = Optional.empty();
+  private Optional<Bytes> targetRamBytes = Optional.empty();
+  private Optional<Bytes> exoBytes = Optional.empty();
 
   protected boolean exoIsRlpTxn = false;
   protected boolean exoIsLog = false;
@@ -132,8 +136,8 @@ public class MmuCall implements TraceSubFragment {
     return this.exoIsLog(true).updateExoSum(EXO_SUM_WEIGHT_LOG);
   }
 
-  public final MmuCall setRom() {
-    return this.exoIsRom(true).updateExoSum(EXO_SUM_WEIGHT_ROM);
+  public final void setRom() {
+    this.exoIsRom(true).updateExoSum(EXO_SUM_WEIGHT_ROM);
   }
 
   public final MmuCall setKec() {
@@ -152,6 +156,7 @@ public class MmuCall implements TraceSubFragment {
     return this.exoIsEcData(true).updateExoSum(EXO_SUM_WEIGHT_ECDATA);
   }
 
+  // TODO: make the instruction an enum
   public MmuCall(final int instruction) {
     this.instruction = instruction;
   }
@@ -163,38 +168,11 @@ public class MmuCall implements TraceSubFragment {
   public static MmuCall sha3(final Hub hub) {
     return new MmuCall(MMU_INST_RAM_TO_EXO_WITH_PADDING)
         .sourceId(hub.currentFrame().contextNumber())
-        .auxId(hub.state().stamps().hashInfo())
+        .auxId(hub.state().stamps().hub())
         .sourceOffset(EWord.of(hub.messageFrame().getStackItem(0)))
         .size(Words.clampedToLong(hub.messageFrame().getStackItem(1)))
         .referenceSize(Words.clampedToLong(hub.messageFrame().getStackItem(1)))
         .setKec();
-  }
-
-  public static MmuCall callDataLoad(final Hub hub) {
-    final long callDataOffset = hub.currentFrame().callDataInfo().memorySpan().offset();
-    final long callDataSize = hub.currentFrame().callDataInfo().memorySpan().length();
-
-    final long sourceOffset = Words.clampedToLong(hub.messageFrame().getStackItem(0));
-
-    if (sourceOffset >= callDataSize) {
-      return nop();
-    }
-
-    final EWord read =
-        EWord.of(
-            Bytes.wrap(
-                Arrays.copyOfRange(
-                    hub.currentFrame().callDataInfo().data().toArray(),
-                    (int) sourceOffset,
-                    (int) (sourceOffset + WORD_SIZE))));
-
-    return new MmuCall(MMU_INST_RIGHT_PADDED_WORD_EXTRACTION)
-        .sourceId(callDataContextNumber(hub))
-        .sourceOffset(EWord.of(sourceOffset))
-        .referenceOffset(callDataOffset)
-        .referenceSize(callDataSize)
-        .limb1(read.hi())
-        .limb2(read.lo());
   }
 
   public static MmuCall callDataCopy(final Hub hub) {
@@ -210,12 +188,29 @@ public class MmuCall implements TraceSubFragment {
         .referenceSize(callDataSegment.length());
   }
 
-  private static int callDataContextNumber(final Hub hub) {
+  public static int callDataContextNumber(final Hub hub) {
     final CallFrame currentFrame = hub.callStack().current();
 
     return currentFrame.isRoot()
         ? currentFrame.contextNumber() - 1
         : hub.callStack().parent().contextNumber();
+  }
+
+  public static MmuCall LogX(final Hub hub, final LogInvocation logInvocation) {
+    return new MmuCall(MMU_INST_RAM_TO_EXO_WITH_PADDING)
+        .sourceId(logInvocation.callFrame.contextNumber())
+        .targetId(hub.state.stamps().log())
+        .sourceOffset(logInvocation.offset)
+        .size(logInvocation.size)
+        .referenceSize(logInvocation.size)
+        .sourceRamBytes(Optional.of(logInvocation.ramSourceBytes))
+        .exoBytes(
+            Optional.of(
+                slice(
+                    logInvocation.ramSourceBytes,
+                    (int) Words.clampedToLong(logInvocation.offset),
+                    (int) logInvocation.size)))
+        .setLog();
   }
 
   public static MmuCall codeCopy(final Hub hub) {
@@ -229,45 +224,14 @@ public class MmuCall implements TraceSubFragment {
   public static MmuCall returnDataCopy(final Hub hub) {
     final MemorySpan returnDataSegment = hub.currentFrame().latestReturnDataSource();
     return new MmuCall(MMU_INST_ANY_TO_RAM_WITH_PADDING)
-        .sourceId(hub.callStack().getById(hub.currentFrame().currentReturner()).contextNumber())
+        .sourceId(
+            hub.callStack().getById(hub.currentFrame().returnDataContextNumber()).contextNumber())
         .targetId(hub.currentFrame().contextNumber())
         .sourceOffset(EWord.of(hub.messageFrame().getStackItem(1)))
         .targetOffset(EWord.of(hub.messageFrame().getStackItem(0)))
         .size(Words.clampedToLong(hub.messageFrame().getStackItem(2)))
         .referenceOffset(returnDataSegment.offset())
         .referenceSize(returnDataSegment.length());
-  }
-
-  public static MmuCall mload(final Hub hub) {
-    final long offset = Words.clampedToLong(hub.messageFrame().getStackItem(0));
-    final EWord loadedValue = EWord.of(hub.messageFrame().shadowReadMemory(offset, WORD_SIZE));
-    return new MmuCall(MMU_INST_MLOAD)
-        .sourceId(hub.currentFrame().contextNumber())
-        .sourceOffset(EWord.of(offset))
-        .limb1(loadedValue.hi())
-        .limb2(loadedValue.lo());
-  }
-
-  public static MmuCall mstore(final Hub hub) {
-    final EWord storedValue = EWord.of(hub.messageFrame().getStackItem(1));
-    return new MmuCall(MMU_INST_MSTORE)
-        .targetId(hub.currentFrame().contextNumber())
-        .targetOffset(EWord.of(hub.messageFrame().getStackItem(0)))
-        .limb1(storedValue.hi())
-        .limb2(storedValue.lo());
-  }
-
-  public static MmuCall mstore8(final Hub hub) {
-    final EWord storedValue = EWord.of(hub.messageFrame().getStackItem(1));
-    return new MmuCall(MMU_INST_MSTORE8)
-        .targetId(hub.currentFrame().contextNumber())
-        .targetOffset(EWord.of(hub.messageFrame().getStackItem(0)))
-        .limb1(storedValue.hi())
-        .limb2(storedValue.lo());
-  }
-
-  public static MmuCall log(final Hub hub) {
-    return new LogX(hub);
   }
 
   public static MmuCall create(final Hub hub) {
@@ -298,9 +262,9 @@ public class MmuCall implements TraceSubFragment {
 
   public static MmuCall txInit(final Hub hub) {
     return new MmuCall(MMU_INST_EXO_TO_RAM_TRANSPLANTS)
-        .sourceId(hub.transients().tx().absNumber())
+        .sourceId(hub.txStack().current().getAbsoluteTransactionNumber())
         .targetId(hub.stamp())
-        .size(hub.transients().tx().besuTx().getData().map(Bytes::size).orElse(0))
+        .size(hub.txStack().current().getBesuTransaction().getData().map(Bytes::size).orElse(0))
         .phase(RLP_TXN_PHASE_DATA)
         .setRlpTxn();
   }
@@ -686,10 +650,14 @@ public class MmuCall implements TraceSubFragment {
   }
 
   @Override
-  public Trace trace(Trace trace) {
+  public Trace trace(Trace trace, State.TxState.Stamps stamps) {
+    stamps.incrementMmuStamp();
     return trace
-        .pMiscMmuFlag(this.enabled())
-        .pMiscMmuInst(this.instruction())
+        .pMiscMmuFlag(true)
+        .pMiscMmuInst(
+            this.instruction() == -1
+                ? 0
+                : this.instruction()) // TODO: WTF I wanted to put -1? Only for debug?
         .pMiscMmuTgtId(this.targetId())
         .pMiscMmuSrcId(this.sourceId())
         .pMiscMmuAuxId(this.auxId())

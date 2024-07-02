@@ -16,10 +16,15 @@
 package net.consensys.linea.zktracer.module.hub.section;
 
 import net.consensys.linea.zktracer.module.hub.Hub;
-import net.consensys.linea.zktracer.module.hub.fragment.TraceFragment;
+import net.consensys.linea.zktracer.module.hub.fragment.imc.ImcFragment;
+import net.consensys.linea.zktracer.module.hub.fragment.imc.call.exp.ExpCall;
+import net.consensys.linea.zktracer.module.hub.fragment.imc.call.exp.ExplogExpCall;
 
 public class ExpSection extends TraceSection {
-  public ExpSection(Hub hub, TraceFragment... chunks) {
-    this.addFragmentsAndStack(hub, hub.currentFrame(), chunks);
+  public ExpSection(Hub hub) {
+    super(hub, (short) 3);
+    final ExpCall expCall = new ExplogExpCall();
+    final ImcFragment miscFragment = ImcFragment.empty(hub).callExp(expCall);
+    this.addFragmentsAndStack(hub, miscFragment);
   }
 }
